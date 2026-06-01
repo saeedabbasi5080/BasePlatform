@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="BasePlatform.Admin/BasePlatform.Admin.csproj" />
+  <Project Path="BasePlatform.Api/BasePlatform.Api.csproj" />
+  <Project Path="BasePlatform.Application/BasePlatform.Application.csproj" />
+  <Project Path="BasePlatform.Domain/BasePlatform.Domain.csproj" />
+  <Project Path="BasePlatform.Infrastructure/BasePlatform.Infrastructure.csproj" />
+  <Project Path="BasePlatform.Shared/BasePlatform.Shared.csproj" />
+</Solution>
