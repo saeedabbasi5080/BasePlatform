@@ -10,4 +10,8 @@
     <ProjectReference Include="..\BasePlatform.Shared\BasePlatform.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+  </ItemGroup>
+
 </Project>
