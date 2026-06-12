@@ -6,13 +6,35 @@ using BasePlatform.Application.Features.Auth.Logout;
 using BasePlatform.Application.Features.Auth.RefreshToken;
 using BasePlatform.Application.Features.Auth.Register;
 using BasePlatform.Application.Features.Auth.ResetPassword;
+using BasePlatform.Application.Features.Permissions.AssignPermissionsToRole;
+using BasePlatform.Application.Features.Permissions.GetAllPermissions;
+using BasePlatform.Application.Features.Permissions.GetRolePermissions;
+using BasePlatform.Application.Features.Roles.CreateRole;
+using BasePlatform.Application.Features.Roles.DeleteRole;
+using BasePlatform.Application.Features.Roles.GetAllRoles;
+using BasePlatform.Application.Features.Roles.GetRoleById;
+using BasePlatform.Application.Features.Roles.UpdateRole;
+using BasePlatform.Application.Features.Users.AssignRole;
+using BasePlatform.Application.Features.Users.ChangePassword;
+using BasePlatform.Application.Features.Users.DeactivateUser;
+using BasePlatform.Application.Features.Users.GetAllUsers;
+using BasePlatform.Application.Features.Users.GetCurrentUser;
+using BasePlatform.Application.Features.Users.GetUserById;
+using BasePlatform.Application.Features.Users.UpdateProfile;
 using BasePlatform.Infrastructure.Authentication;
+using BasePlatform.Infrastructure.Authorization;
 using BasePlatform.Infrastructure.Dispatcher;
 using BasePlatform.Infrastructure.Identity;
 using BasePlatform.Infrastructure.Persistence;
 using BasePlatform.Infrastructure.Persistence.Dapper;
+using BasePlatform.Infrastructure.Persistence.Repositories;
+using BasePlatform.Infrastructure.Queries.Permissions;
+using BasePlatform.Infrastructure.Queries.Roles;
+using BasePlatform.Infrastructure.Queries.Users;
 using BasePlatform.Infrastructure.Services;
 using BasePlatform.Shared;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +47,7 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Database
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
@@ -32,19 +55,32 @@ public static class InfrastructureServiceExtensions
 
         services.AddScoped<IDapperQueryConnection, DapperQueryConnection>();
 
+        // Identity
         services.AddIdentityServices();
         services.AddScoped<IdentitySeeder>();
 
+        // Authorization
+        services.AddScoped<IUserClaimsPrincipalFactory<BasePlatform.Domain.Entities.AppUser>,
+            PermissionClaimsPrincipalFactory>();
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
+        // JWT & Token
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
+        // Services
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUserService>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
 
+        // Repositories
+        services.AddScoped<IPermissionRepository, PermissionRepository>();
+
+        // Dispatcher
         services.AddScoped<IDispatcher, BasePlatform.Infrastructure.Dispatcher.Dispatcher>();
 
+        // Auth Handlers
         services.AddScoped<ICommandHandler<RegisterCommand, Result<RegisterResponse>>, RegisterCommandHandler>();
         services.AddScoped<ICommandHandler<LoginCommand, Result<LoginResponse>>, LoginCommandHandler>();
         services.AddScoped<ICommandHandler<LogoutCommand, Result>, LogoutCommandHandler>();
@@ -52,6 +88,27 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICommandHandler<ConfirmEmailCommand, Result>, ConfirmEmailCommandHandler>();
         services.AddScoped<ICommandHandler<ForgotPasswordCommand, Result>, ForgotPasswordCommandHandler>();
         services.AddScoped<ICommandHandler<ResetPasswordCommand, Result>, ResetPasswordCommandHandler>();
+
+        // Users Handlers
+        services.AddScoped<IQueryHandler<GetCurrentUserQuery, Result<UserProfileResponse>>, GetCurrentUserQueryHandler>();
+        services.AddScoped<IQueryHandler<GetUserByIdQuery, Result<UserProfileResponse>>, GetUserByIdQueryHandler>();
+        services.AddScoped<IQueryHandler<GetAllUsersQuery, Result<PaginatedResult<UserSummaryDto>>>, GetAllUsersQueryHandler>();
+        services.AddScoped<ICommandHandler<UpdateProfileCommand, Result>, UpdateProfileCommandHandler>();
+        services.AddScoped<ICommandHandler<ChangePasswordCommand, Result>, ChangePasswordCommandHandler>();
+        services.AddScoped<ICommandHandler<DeactivateUserCommand, Result>, DeactivateUserCommandHandler>();
+        services.AddScoped<ICommandHandler<AssignRoleCommand, Result>, AssignRoleCommandHandler>();
+
+        // Roles Handlers
+        services.AddScoped<IQueryHandler<GetAllRolesQuery, Result<List<RoleSummaryDto>>>, GetAllRolesQueryHandler>();
+        services.AddScoped<IQueryHandler<GetRoleByIdQuery, Result<RoleDetailResponse>>, GetRoleByIdQueryHandler>();
+        services.AddScoped<ICommandHandler<CreateRoleCommand, Result<Guid>>, CreateRoleCommandHandler>();
+        services.AddScoped<ICommandHandler<UpdateRoleCommand, Result>, UpdateRoleCommandHandler>();
+        services.AddScoped<ICommandHandler<DeleteRoleCommand, Result>, DeleteRoleCommandHandler>();
+
+        // Permissions Handlers
+        services.AddScoped<IQueryHandler<GetAllPermissionsQuery, Result<List<PermissionDto>>>, GetAllPermissionsQueryHandler>();
+        services.AddScoped<IQueryHandler<GetRolePermissionsQuery, Result<List<PermissionDto>>>, GetRolePermissionsQueryHandler>();
+        services.AddScoped<ICommandHandler<AssignPermissionsToRoleCommand, Result>, AssignPermissionsToRoleCommandHandler>();
 
         return services;
     }

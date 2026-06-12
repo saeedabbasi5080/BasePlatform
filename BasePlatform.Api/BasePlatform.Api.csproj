@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BasePlatform.Application\BasePlatform.Application.csproj" />
+    <ProjectReference Include="..\BasePlatform.Domain\BasePlatform.Domain.csproj" />
     <ProjectReference Include="..\BasePlatform.Infrastructure\BasePlatform.Infrastructure.csproj" />
     <ProjectReference Include="..\BasePlatform.Shared\BasePlatform.Shared.csproj" />
   </ItemGroup>

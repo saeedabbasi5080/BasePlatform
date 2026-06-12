@@ -20,9 +20,7 @@ public sealed class Dispatcher : IDispatcher
             .MakeGenericType(command.GetType(), typeof(TResult));
 
         var handler = _serviceProvider.GetRequiredService(handlerType);
-
         var method = handlerType.GetMethod("HandleAsync")!;
-
         var task = (Task<TResult>)method.Invoke(handler, [command, cancellationToken])!;
 
         return await task;
@@ -33,13 +31,11 @@ public sealed class Dispatcher : IDispatcher
         CancellationToken cancellationToken = default)
     {
         var handlerType = typeof(ICommandHandler<,>)
-            .MakeGenericType(command.GetType(), typeof(Shared.Result));
+            .MakeGenericType(command.GetType(), typeof(BasePlatform.Shared.Result));
 
         var handler = _serviceProvider.GetRequiredService(handlerType);
-
         var method = handlerType.GetMethod("HandleAsync")!;
-
-        var task = (Task<Shared.Result>)method.Invoke(handler, [command, cancellationToken])!;
+        var task = (Task<BasePlatform.Shared.Result>)method.Invoke(handler, [command, cancellationToken])!;
 
         await task;
     }
@@ -52,9 +48,7 @@ public sealed class Dispatcher : IDispatcher
             .MakeGenericType(query.GetType(), typeof(TResult));
 
         var handler = _serviceProvider.GetRequiredService(handlerType);
-
         var method = handlerType.GetMethod("HandleAsync")!;
-
         var task = (Task<TResult>)method.Invoke(handler, [query, cancellationToken])!;
 
         return await task;
