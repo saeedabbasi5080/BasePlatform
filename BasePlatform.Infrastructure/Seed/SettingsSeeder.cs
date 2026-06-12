@@ -7,83 +7,54 @@ namespace BasePlatform.Infrastructure.Seed;
 
 public static class SettingsSeeder
 {
-    public static async Task SeedAsync(
-        AppDbContext context,
-        ILogger logger,
-        CancellationToken cancellationToken = default)
+    public static async Task SeedAsync(AppDbContext context, ILogger logger)
     {
-        var existingKeys = await context.AppSettings
-            .AsNoTracking()
-            .Select(s => s.Key)
-            .ToListAsync(cancellationToken);
-
-        var defaults = BuildDefaultSettings()
-            .Where(s => !existingKeys.Contains(s.Key))
-            .ToList();
-
-        if (defaults.Count == 0)
+        var settings = new List<(string Key, string Value, string Description, bool IsPublic)>
         {
-            logger.LogInformation("Settings already seeded.");
-            return;
+            ("app.name",            "BasePlatform", "Application name",              true),
+            ("app.version",         "1.0.0",        "Application version",           true),
+            ("app.maintenance",     "false",         "Maintenance mode flag",         false),
+            ("email.confirmation",  "true",          "Require email confirmation",    false),
+            ("storage.provider",    "local",         "Active storage provider",       false),
+            ("token.accessExpiry",  "15",            "JWT access token expiry (min)", false),
+            ("token.refreshExpiry", "7",             "Refresh token expiry (days)",   false),
+        };
+
+        var existingKeys = await context.AppSettings
+            .Select(s => s.Key)
+            .ToListAsync();
+
+        var existingSet = new HashSet<string>(existingKeys);
+
+        foreach (var (key, value, description, isPublic) in settings)
+        {
+            if (existingSet.Contains(key))
+                continue;
+
+            context.AppSettings.Add(new AppSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = key,
+                Value = value,
+                Description = description,
+                IsPublic = isPublic,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedByUserId = null
+            });
+
+            logger.LogInformation("Seeded setting: {Key}", key);
         }
 
-        await context.AppSettings.AddRangeAsync(defaults, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("{Count} settings seeded successfully.", defaults.Count);
-    }
-
-    private static List<AppSetting> BuildDefaultSettings()
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return
-        [
-            new AppSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = "App.Name",
-                Value = "BasePlatform",
-                Description = "Application display name",
-                IsPublic = true,
-                UpdatedAt = now
-            },
-            new AppSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = "App.Version",
-                Value = "1.0.0",
-                Description = "Current application version",
-                IsPublic = true,
-                UpdatedAt = now
-            },
-            new AppSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = "App.MaintenanceMode",
-                Value = "false",
-                Description = "When true, API returns 503 for non-admin requests",
-                IsPublic = false,
-                UpdatedAt = now
-            },
-            new AppSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = "Email.SupportAddress",
-                Value = "support@example.com",
-                Description = "Support email shown to users",
-                IsPublic = true,
-                UpdatedAt = now
-            },
-            new AppSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = "Auth.MaxFailedLoginAttempts",
-                Value = "5",
-                Description = "Max failed login attempts before lockout",
-                IsPublic = false,
-                UpdatedAt = now
-            }
-        ];
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate") == true ||
+                                            ex.InnerException?.Message.Contains("Duplicate") == true ||
+                                            ex.InnerException?.Message.Contains("unique") == true)
+        {
+            logger.LogWarning("Some settings already seeded by another process. Skipping.");
+            context.ChangeTracker.Clear();
+        }
     }
 }

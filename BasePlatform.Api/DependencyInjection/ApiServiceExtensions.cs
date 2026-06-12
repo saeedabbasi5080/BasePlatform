@@ -1,12 +1,12 @@
-﻿using BasePlatform.Api.Configuration;
+﻿using System.Reflection;
+using System.Text;
+using BasePlatform.Api.Configuration;
 using BasePlatform.Domain.Constants;
 using BasePlatform.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
 using Microsoft.OpenApi.Models;
-using System.Text;
 
 namespace BasePlatform.Api.DependencyInjection;
 
@@ -26,17 +26,23 @@ public static class ApiServiceExtensions
             {
                 Title = "BasePlatform API",
                 Version = "v1",
-                Description = "BasePlatform REST API"
+                Description = "Production-grade modular backend starter platform."
             });
+
+            // XML Comments
+            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            if (File.Exists(xmlPath))
+                options.IncludeXmlComments(xmlPath);
 
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
-                Scheme = "Bearer",
+                Scheme = "bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description = "Enter: Bearer {token}"
+                Description = "Enter your JWT token."
             });
 
             options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -81,7 +87,9 @@ public static class ApiServiceExtensions
                 };
             });
 
-        // Authorization Policies
+        // Permission-based Authorization
+        services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
         services.AddAuthorization(options =>
         {
             foreach (var permission in Permissions.All)

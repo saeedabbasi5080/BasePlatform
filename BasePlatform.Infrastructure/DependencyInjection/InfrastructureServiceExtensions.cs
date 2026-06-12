@@ -1,4 +1,6 @@
 ﻿using BasePlatform.Application.Common.Abstractions;
+using BasePlatform.Application.Features.Admin.Auth.Login;
+using BasePlatform.Application.Features.Audit.GetAuditLogs;
 using BasePlatform.Application.Features.Auth.ConfirmEmail;
 using BasePlatform.Application.Features.Auth.ForgotPassword;
 using BasePlatform.Application.Features.Auth.Login;
@@ -35,6 +37,8 @@ using BasePlatform.Infrastructure.Identity;
 using BasePlatform.Infrastructure.Persistence;
 using BasePlatform.Infrastructure.Persistence.Dapper;
 using BasePlatform.Infrastructure.Persistence.Repositories;
+using BasePlatform.Infrastructure.Queries.Admin;
+using BasePlatform.Infrastructure.Queries.Audit;
 using BasePlatform.Infrastructure.Queries.Files;
 using BasePlatform.Infrastructure.Queries.Permissions;
 using BasePlatform.Infrastructure.Queries.Roles;
@@ -57,6 +61,9 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+
+        var connStr = configuration.GetConnectionString("DefaultConnection");
+        Console.WriteLine($"[DEBUG] ConnectionString = '{connStr}'");
         // Database
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
@@ -137,6 +144,12 @@ public static class InfrastructureServiceExtensions
         // Files Command Handlers
         services.AddScoped<ICommandHandler<UploadFileCommand, Result<UploadFileResponse>>, UploadFileCommandHandler>();
         services.AddScoped<ICommandHandler<DeleteFileCommand, Result>, DeleteFileCommandHandler>();
+
+        // Audit Query Handler
+        services.AddScoped<IQueryHandler<GetAuditLogsQuery, Result<PaginatedResult<AuditLogDto>>>, GetAuditLogsQueryHandler>();
+
+        // Admin Auth Handler
+        services.AddScoped<ICommandHandler<AdminLoginCommand, Result<AdminLoginResponse>>, AdminLoginCommandHandler>();
 
         return services;
     }

@@ -2,39 +2,70 @@ using BasePlatform.Api.DependencyInjection;
 using BasePlatform.Api.Middleware;
 using BasePlatform.Infrastructure.DependencyInjection;
 using BasePlatform.Infrastructure.Identity;
+using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApiServices(builder.Configuration);
-
-var app = builder.Build();
-
-// Seed
-using (var scope = app.Services.CreateScope())
+try
 {
-    var seeder = scope.ServiceProvider.GetRequiredService<IdentitySeeder>();
-    await seeder.SeedAsync();
-}
+    var builder = WebApplication.CreateBuilder(args);
 
-// Middleware pipeline — ????? ??? ???
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseMiddleware<RequestLoggingMiddleware>();
+    builder.Host.UseSerilog((context, services, config) =>
+        config.ReadFrom.Configuration(context.Configuration)
+              .ReadFrom.Services(services)
+              .Enrich.FromLogContext()
+              .Enrich.WithMachineName()
+              .Enrich.WithEnvironmentName());
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
+    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddApiServices(builder.Configuration);
+    builder.Services.AddObservability(builder.Configuration);
+
+    var app = builder.Build();
+
+    using (var scope = app.Services.CreateScope())
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "BasePlatform API v1");
-        options.RoutePrefix = "swagger";
+        var seeder = scope.ServiceProvider.GetRequiredService<IdentitySeeder>();
+        await seeder.SeedAsync();
+    }
+
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseMiddleware<CorrelationIdMiddleware>();
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.MessageTemplate =
+            "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
     });
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "BasePlatform API v1");
+            options.RoutePrefix = "swagger";
+        });
+    }
+
+    app.UseHttpsRedirection();
+    app.UseCors("DefaultPolicy");
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
+    app.MapHealthChecks("/health");
+
+    Log.Information("BasePlatform.Api started on {Urls}",
+        string.Join(", ", builder.WebHost.GetSetting("urls")?.Split(";") ?? ["http://localhost:5273"]));
+
+    await app.RunAsync();
 }
-
-app.UseHttpsRedirection();
-app.UseCors("DefaultPolicy");
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapControllers();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

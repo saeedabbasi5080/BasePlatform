@@ -1,12 +1,12 @@
 ﻿using System.Security.Claims;
 using BasePlatform.Admin.Configuration;
-using BasePlatform.Domain.Constants;
 using BasePlatform.Domain.Entities;
+using BasePlatform.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace BasePlatform.Admin.Controllers;
 
@@ -15,17 +15,16 @@ namespace BasePlatform.Admin.Controllers;
 public sealed class AdminAuthController : ControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
-    private readonly SignInManager<AppUser> _signInManager;
+    private readonly AppDbContext _context;
 
     public AdminAuthController(
         UserManager<AppUser> userManager,
-        SignInManager<AppUser> signInManager)
+        AppDbContext context)
     {
         _userManager = userManager;
-        _signInManager = signInManager;
+        _context = context;
     }
 
-    // POST admin/auth/login
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login(
@@ -47,20 +46,30 @@ public sealed class AdminAuthController : ControllerBase
         if (!await _userManager.IsEmailConfirmedAsync(user))
             return Unauthorized(new { Code = "Auth.EmailNotConfirmed", Description = "Email is not confirmed." });
 
-        var claims = await _userManager.GetClaimsAsync(user);
-        var hasAdminAccess = claims.Any(c =>
-            c.Type == "permission" &&
-            string.Equals(c.Value, Permissions.AdminAccess, StringComparison.OrdinalIgnoreCase));
+        // چک admin.access از RolePermissions — نه AspNetUserClaims
+        var hasAdminAccess = await (
+            from ur in _context.UserRoles
+            join rp in _context.RolePermissions on ur.RoleId equals rp.RoleId
+            join p in _context.Permissions on rp.PermissionId equals p.Id
+            where ur.UserId == user.Id && p.Name == "admin.access"
+            select p.Id
+        ).AnyAsync(cancellationToken);
 
         if (!hasAdminAccess)
             return Unauthorized(new { Code = "Auth.AccessDenied", Description = "You do not have admin access." });
 
+        // گرفتن roles و permissions
         var roles = await _userManager.GetRolesAsync(user);
-        var permissions = claims
-            .Where(c => c.Type == "permission")
-            .Select(c => c.Value)
-            .ToList();
 
+        var permissions = await (
+            from ur in _context.UserRoles
+            join rp in _context.RolePermissions on ur.RoleId equals rp.RoleId
+            join p in _context.Permissions on rp.PermissionId equals p.Id
+            where ur.UserId == user.Id
+            select p.Name
+        ).Distinct().ToListAsync(cancellationToken);
+
+        // ساخت Cookie
         var claimsList = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -87,11 +96,12 @@ public sealed class AdminAuthController : ControllerBase
         {
             UserId = user.Id,
             user.Email,
-            user.DisplayName
+            user.DisplayName,
+            Roles = roles,
+            Permissions = permissions
         });
     }
 
-    // POST admin/auth/logout
     [HttpPost("logout")]
     [Authorize(AuthenticationSchemes = AdminCookieDefaults.AuthenticationScheme)]
     public async Task<IActionResult> Logout()

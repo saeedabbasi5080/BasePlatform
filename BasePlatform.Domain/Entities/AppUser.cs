@@ -12,4 +12,5 @@ public class AppUser : IdentityUser<Guid>
     public DateTimeOffset UpdatedAt { get; set; }
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<AppUserRole> UserRoles { get; set; } = new List<AppUserRole>();
 }

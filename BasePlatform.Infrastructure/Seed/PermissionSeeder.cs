@@ -1,5 +1,4 @@
-﻿using BasePlatform.Domain.Constants;
-using BasePlatform.Domain.Entities;
+﻿using BasePlatform.Domain.Entities;
 using BasePlatform.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -8,55 +7,64 @@ namespace BasePlatform.Infrastructure.Seed;
 
 public static class PermissionSeeder
 {
-    public static async Task SeedAsync(
-        AppDbContext context,
-        ILogger logger,
-        CancellationToken cancellationToken = default)
+    public static async Task SeedAsync(AppDbContext context, ILogger logger)
     {
-        var existingPermissions = await context.Permissions
-            .AsNoTracking()
-            .Select(x => x.Name)
-            .ToListAsync(cancellationToken);
-
-        var missingPermissions = BuildPermissions()
-            .Where(x => !existingPermissions.Contains(x.Name))
-            .ToList();
-
-        if (missingPermissions.Count == 0)
+        var permissions = new List<(string Name, string Group, string Description)>
         {
-            logger.LogInformation("Permissions already seeded.");
-            return;
+            ("users.view",         "Users",       "View users"),
+            ("users.create",       "Users",       "Create users"),
+            ("users.edit",         "Users",       "Edit users"),
+            ("users.delete",       "Users",       "Delete users"),
+            ("roles.view",         "Roles",       "View roles"),
+            ("roles.create",       "Roles",       "Create roles"),
+            ("roles.edit",         "Roles",       "Edit roles"),
+            ("roles.delete",       "Roles",       "Delete roles"),
+            ("roles.assign",       "Roles",       "Assign roles to users"),
+            ("permissions.view",   "Permissions", "View permissions"),
+            ("permissions.manage", "Permissions", "Manage permissions"),
+            ("settings.view",      "Settings",    "View settings"),
+            ("settings.update",    "Settings",    "Update settings"),
+            ("files.upload",       "Files",       "Upload files"),
+            ("files.delete",       "Files",       "Delete files"),
+            ("audit.view",         "Audit",       "View audit logs"),
+            ("admin.access",       "Admin",       "Access admin panel"),
+        };
+
+        // یکبار همه موجودها را بگیر
+        var existingNames = await context.Permissions
+            .Select(p => p.Name)
+            .ToListAsync();
+
+        var existingSet = new HashSet<string>(existingNames);
+
+        foreach (var (name, group, description) in permissions)
+        {
+            if (existingSet.Contains(name))
+                continue;
+
+            context.Permissions.Add(new Permission
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                Group = group,
+                Description = description,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            logger.LogInformation("Seeded permission: {Permission}", name);
         }
 
-        await context.Permissions.AddRangeAsync(missingPermissions, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("{Count} permissions seeded successfully.", missingPermissions.Count);
-    }
-
-    private static List<Permission> BuildPermissions()
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return
-        [
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.UsersView,        Description = "View users",             Group = "Users",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.UsersCreate,      Description = "Create users",           Group = "Users",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.UsersEdit,        Description = "Edit users",             Group = "Users",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.UsersDelete,      Description = "Delete users",           Group = "Users",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.RolesView,        Description = "View roles",             Group = "Roles",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.RolesCreate,      Description = "Create roles",           Group = "Roles",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.RolesEdit,        Description = "Edit roles",             Group = "Roles",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.RolesDelete,      Description = "Delete roles",           Group = "Roles",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.RolesAssign,      Description = "Assign roles",           Group = "Roles",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.PermissionsView,  Description = "View permissions",       Group = "Permissions", CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.PermissionsManage,Description = "Manage permissions",     Group = "Permissions", CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.SettingsView,     Description = "View settings",          Group = "Settings",    CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.SettingsUpdate,   Description = "Update settings",        Group = "Settings",    CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.FilesUpload,      Description = "Upload files",           Group = "Files",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.FilesDelete,      Description = "Delete files",           Group = "Files",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.AuditView,        Description = "View audit logs",        Group = "Audit",       CreatedAt = now },
-            new Permission { Id = Guid.NewGuid(), Name = Permissions.AdminAccess,      Description = "Access admin panel",     Group = "Admin",       CreatedAt = now }
-        ];
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate") == true ||
+                                            ex.InnerException?.Message.Contains("Duplicate") == true ||
+                                            ex.InnerException?.Message.Contains("unique") == true)
+        {
+            // race condition بین Api و Admin — بی‌خطر است
+            logger.LogWarning("Some permissions already seeded by another process. Skipping.");
+            context.ChangeTracker.Clear();
+        }
     }
 }
