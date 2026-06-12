@@ -1,8 +1,12 @@
-﻿using System.Text;
-using BasePlatform.Api.Configuration;
+﻿using BasePlatform.Api.Configuration;
+using BasePlatform.Domain.Constants;
+using BasePlatform.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using Microsoft.OpenApi.Models;
+using System.Text;
 
 namespace BasePlatform.Api.DependencyInjection;
 
@@ -14,6 +18,44 @@ public static class ApiServiceExtensions
     {
         services.AddControllers();
 
+        // Swagger
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "BasePlatform API",
+                Version = "v1",
+                Description = "BasePlatform REST API"
+            });
+
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter: Bearer {token}"
+            });
+
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
+        });
+
+        // JWT Authentication
         var jwtSettings = configuration.GetSection("Jwt").Get<JwtSettings>()
             ?? throw new InvalidOperationException("JWT settings are not configured.");
 
@@ -39,7 +81,24 @@ public static class ApiServiceExtensions
                 };
             });
 
-        services.AddAuthorization();
+        // Authorization Policies
+        services.AddAuthorization(options =>
+        {
+            foreach (var permission in Permissions.All)
+            {
+                options.AddPolicy(permission, policy =>
+                    policy.Requirements.Add(new PermissionRequirement(permission)));
+            }
+        });
+
+        // CORS
+        services.AddCors(options =>
+        {
+            options.AddPolicy("DefaultPolicy", policy =>
+                policy.AllowAnyOrigin()
+                      .AllowAnyMethod()
+                      .AllowAnyHeader());
+        });
 
         return services;
     }

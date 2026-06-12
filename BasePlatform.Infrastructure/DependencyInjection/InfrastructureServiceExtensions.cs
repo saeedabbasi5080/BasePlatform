@@ -6,6 +6,9 @@ using BasePlatform.Application.Features.Auth.Logout;
 using BasePlatform.Application.Features.Auth.RefreshToken;
 using BasePlatform.Application.Features.Auth.Register;
 using BasePlatform.Application.Features.Auth.ResetPassword;
+using BasePlatform.Application.Features.Files.DeleteFile;
+using BasePlatform.Application.Features.Files.GetFileById;
+using BasePlatform.Application.Features.Files.UploadFile;
 using BasePlatform.Application.Features.Permissions.AssignPermissionsToRole;
 using BasePlatform.Application.Features.Permissions.GetAllPermissions;
 using BasePlatform.Application.Features.Permissions.GetRolePermissions;
@@ -14,6 +17,9 @@ using BasePlatform.Application.Features.Roles.DeleteRole;
 using BasePlatform.Application.Features.Roles.GetAllRoles;
 using BasePlatform.Application.Features.Roles.GetRoleById;
 using BasePlatform.Application.Features.Roles.UpdateRole;
+using BasePlatform.Application.Features.Settings.GetSettingByKey;
+using BasePlatform.Application.Features.Settings.GetSettings;
+using BasePlatform.Application.Features.Settings.UpsertSetting;
 using BasePlatform.Application.Features.Users.AssignRole;
 using BasePlatform.Application.Features.Users.ChangePassword;
 using BasePlatform.Application.Features.Users.DeactivateUser;
@@ -24,14 +30,18 @@ using BasePlatform.Application.Features.Users.UpdateProfile;
 using BasePlatform.Infrastructure.Authentication;
 using BasePlatform.Infrastructure.Authorization;
 using BasePlatform.Infrastructure.Dispatcher;
+using BasePlatform.Infrastructure.Email;
 using BasePlatform.Infrastructure.Identity;
 using BasePlatform.Infrastructure.Persistence;
 using BasePlatform.Infrastructure.Persistence.Dapper;
 using BasePlatform.Infrastructure.Persistence.Repositories;
+using BasePlatform.Infrastructure.Queries.Files;
 using BasePlatform.Infrastructure.Queries.Permissions;
 using BasePlatform.Infrastructure.Queries.Roles;
+using BasePlatform.Infrastructure.Queries.Settings;
 using BasePlatform.Infrastructure.Queries.Users;
 using BasePlatform.Infrastructure.Services;
+using BasePlatform.Infrastructure.Storage;
 using BasePlatform.Shared;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -73,9 +83,15 @@ public static class InfrastructureServiceExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUserService>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+        services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IEmailService, SmtpEmailService>();
+        services.AddScoped<IStorageService, LocalStorageService>();
 
         // Repositories
         services.AddScoped<IPermissionRepository, PermissionRepository>();
+        services.AddScoped<ISettingRepository, SettingRepository>();
+        services.AddScoped<IStoredFileRepository, StoredFileRepository>();
+
 
         // Dispatcher
         services.AddScoped<IDispatcher, BasePlatform.Infrastructure.Dispatcher.Dispatcher>();
@@ -109,6 +125,18 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IQueryHandler<GetAllPermissionsQuery, Result<List<PermissionDto>>>, GetAllPermissionsQueryHandler>();
         services.AddScoped<IQueryHandler<GetRolePermissionsQuery, Result<List<PermissionDto>>>, GetRolePermissionsQueryHandler>();
         services.AddScoped<ICommandHandler<AssignPermissionsToRoleCommand, Result>, AssignPermissionsToRoleCommandHandler>();
+
+        // Settings Handlers 
+        services.AddScoped<IQueryHandler<GetSettingsQuery, Result<List<AppSettingDto>>>, GetSettingsQueryHandler>();
+        services.AddScoped<IQueryHandler<GetSettingByKeyQuery, Result<AppSettingDto>>, GetSettingByKeyQueryHandler>();
+        services.AddScoped<ICommandHandler<UpsertSettingCommand, Result>, UpsertSettingCommandHandler>();
+
+        // Files Query Handlers
+        services.AddScoped<IQueryHandler<GetFileByIdQuery, Result<StoredFileDto>>, GetFileByIdQueryHandler>();
+
+        // Files Command Handlers
+        services.AddScoped<ICommandHandler<UploadFileCommand, Result<UploadFileResponse>>, UploadFileCommandHandler>();
+        services.AddScoped<ICommandHandler<DeleteFileCommand, Result>, DeleteFileCommandHandler>();
 
         return services;
     }
